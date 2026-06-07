@@ -147,13 +147,16 @@ Description=Simple Agent (A-share research assistant)
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/simple_agent
+# 注意：以下路径需替换为你的实际项目路径与运行用户。
+# 例如阿里云 ECS 默认普通用户为 ecs-assist-user，则项目通常在 /home/ecs-assist-user/simple_agent
+User=ecs-assist-user
+WorkingDirectory=/home/ecs-assist-user/simple_agent
 Environment="APP_SECRET_KEY=在此填入你生成的强随机密钥"
 Environment="HF_ENDPOINT=https://hf-mirror.com"
-ExecStart=/opt/simple_agent/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=3
-User=www-data
+Environment="DEEPSEEK_API_KEY=在此填入你的 DeepSeek key"
+ExecStart=/home/ecs-assist-user/simple_agent/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
