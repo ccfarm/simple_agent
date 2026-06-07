@@ -15,3 +15,8 @@ sentence-transformers==2.7.0
 torch==2.3.1+cpu ; sys_platform == "linux"
 torch==2.3.1 ; sys_platform == "darwin"
 numpy<2
+
+# 部署说明：
+# - 需使用 Python 3.11（sentence-transformers 2.7.0 要求 <3.12）
+# - Linux 安装命令需附加 PyTorch CPU 源：
+#     pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu

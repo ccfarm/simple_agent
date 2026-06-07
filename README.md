@@ -104,17 +104,27 @@ free -h                                                       # 确认 swap 已�
 
 ### 1. 准备代码与依赖
 
+> **Python 版本要求：必须使用 Python 3.11**。本项目依赖 `sentence-transformers==2.7.0`，它要求 `Python <3.12`；同时 3.13 / 3.14 等过新版本缺少多个依赖的预编译 wheel。若系统自带的是 3.12+，请按下方额外安装 3.11，不要动系统自带版本。
+
 ```bash
-# 安装 Python（若未安装）
-sudo apt update && sudo apt install -y python3 python3-venv git
+# 安装 git
+sudo apt update && sudo apt install -y git
+
+# 若系统没有 Python 3.11，用 deadsnakes PPA 单独安装（不影响系统自带版本）
+sudo apt install -y software-properties-common
+sudo add-apt-repository -y ppa:deadsnakes/ppa
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv python3.11-dev
+python3.11 --version          # 确认输出 Python 3.11.x
 
 # 拉取代码（或用 scp 上传）
 git clone <你的仓库地址> /opt/simple_agent
 cd /opt/simple_agent
 
-# 创建虚拟环境并安装依赖
-python3 -m venv .venv
+# 创建虚拟环境并安装依赖（务必用 python3.11）
+python3.11 -m venv .venv
 source .venv/bin/activate
+python --version          # 确认是 3.11.x
 
 # 注意两点：
 # (1) /tmp 常是较小的内存盘(tmpfs)，pip 解压 torch 会撑爆，故把临时目录指到根盘
