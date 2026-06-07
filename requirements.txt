@@ -12,16 +12,15 @@ llama-index-core==0.14.16
 llama-index-embeddings-huggingface==0.6.1
 llama-index-llms-openai-like==0.6.0
 sentence-transformers==2.7.0
-transformers==4.57.6
-tokenizers==0.22.2
-huggingface-hub==0.36.2
-safetensors==0.7.0
-torch==2.12.0+cpu ; sys_platform == "linux"
-torch==2.12.0 ; sys_platform == "darwin"
-numpy==1.26.4
+torch==2.3.1+cpu ; sys_platform == "linux"
+torch==2.3.1 ; sys_platform == "darwin"
+numpy<2
 
-# 部署说明：
-# - 需使用 Python 3.11（sentence-transformers 2.7.0 要求 <3.12）
-# - 以上版本为本地验证可用的组合，已锁定以避免 pip 回溯
-# - Linux 安装命令需附加 PyTorch CPU 源：
-#     pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+# 部署说明（Linux / 云主机）：
+# - 必须使用 Python 3.11（sentence-transformers 2.7.0 要求 <3.12）
+# - torch 用 2.3.1+cpu（CPU 版，不含 CUDA / nvidia 依赖，体积小且不触发 meta tensor 问题）
+# - 分两步安装，避免拉取境外源与 nvidia 大包：
+#   1) 装 CPU 版 torch（国内交大镜像）：
+#      pip install torch==2.3.1+cpu -f https://mirror.sjtu.edu.cn/pytorch-wheels/cpu/torch_stable.html
+#   2) 装其余依赖（阿里云源）：
+#      pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
