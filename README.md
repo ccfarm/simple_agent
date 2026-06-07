@@ -68,6 +68,8 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 > 首次进行问答 / 拉取资料时会自动下载本地 embedding 模型（约 100MB），需要联网，之后离线缓存复用。
 
+> **关于 torch**：`requirements.txt` 已锁定 **CPU 版 torch**（Linux 用 `+cpu` wheel），不会拉取庞大的 CUDA / NVIDIA 依赖。本项目 embedding 推理在 CPU 上运行，无需 GPU。
+
 ## 环境变量
 
 | 变量 | 说明 | 默认值 |
@@ -110,11 +112,18 @@ sudo apt update && sudo apt install -y python3 python3-venv git
 git clone <你的仓库地址> /opt/simple_agent
 cd /opt/simple_agent
 
-# 创建虚拟环境并安装依赖（阿里云上务必加国内 PyPI 镜像，否则下载 torch 极慢甚至超时）
+# 创建虚拟环境并安装依赖
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
+
+# 注意两点：
+# (1) /tmp 常是较小的内存盘(tmpfs)，pip 解压 torch 会撑爆，故把临时目录指到根盘
+# (2) requirements.txt 已锁定 CPU 版 torch，不会拉取数 GB 的 CUDA 依赖
+mkdir -p ~/pip_tmp
+TMPDIR=~/pip_tmp pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple/
 ```
+
+> **依赖体积**：CPU 版 torch 约 200MB，加上 transformers / llama-index 等，总安装体积约 1.5GB。若 `pip install` 报 `No space left on device`，多半是 `/tmp` 内存盘太小——确认已加 `TMPDIR=~/pip_tmp` 指向根盘。
 
 > **embedding 模型下载**：首次问答 / 拉取资料时会从 HuggingFace 下载 `bge-small-zh-v1.5`（约 100MB），但阿里云访问 HuggingFace 常超时。解决办法是使用国内镜像 —— 在下方 systemd 配置中已通过 `HF_ENDPOINT=https://hf-mirror.com` 指定。若手动运行，先 `export HF_ENDPOINT=https://hf-mirror.com` 再启动。
 
