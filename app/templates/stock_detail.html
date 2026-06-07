@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/stocks">股票列表</a></li>
+    <li class="breadcrumb-item active">{{ stock.code }} {{ stock.name }}</li>
+  </ol>
+</nav>
+
+<h3>股票详情</h3>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+{% if pull_summary %}
+<div class="alert alert-success">拉取完成：{{ pull_summary }}</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-md-5">
+    <div class="card">
+      <div class="card-header">基础信息</div>
+      <ul class="list-group list-group-flush">
+        <li class="list-group-item d-flex justify-content-between"><span>代码</span><span>{{ stock.code }}</span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>名称</span><span>{{ stock.name }}</span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>市场</span><span>{{ stock.market }}</span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>备注</span><span>{{ stock.note }}</span></li>
+        <li class="list-group-item d-flex justify-content-between"><span>更新时间</span><span>{{ stock.updated_at }}</span></li>
+      </ul>
+    </div>
+  </div>
+  <div class="col-md-7">
+    <div class="card">
+      <div class="card-header">编辑</div>
+      <div class="card-body">
+        <form method="post" action="/stocks/{{ stock.id }}/edit">
+          <div class="mb-3">
+            <label class="form-label">代码</label>
+            <input type="text" class="form-control" value="{{ stock.code }}" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">名称（保存时按代码自动校验填充）</label>
+            <input type="text" class="form-control" value="{{ stock.name }}" readonly>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">市场</label>
+            <select name="market" class="form-select">
+              {% for m in markets %}
+              <option value="{{ m }}" {% if m == stock.market %}selected{% endif %}>{{ m }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">备注</label>
+            <input type="text" name="note" class="form-control" value="{{ stock.note }}">
+          </div>
+          <button type="submit" class="btn btn-primary">保存修改</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>已下载资料</span>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-outline-primary" href="/chat?stock_id={{ stock.id }}">进入 AI 问答</a>
+      <button type="button" class="btn btn-sm btn-primary btn-pull" data-id="{{ stock.id }}"
+              data-label="{{ stock.code }} {{ stock.name }}">
+        <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+        <span class="btn-pull-text">重新拉取</span>
+      </button>
+    </div>
+  </div>
+  <div class="card-body">
+    <div id="pullNotice"></div>
+    <ul class="nav nav-tabs" role="tablist">
+      {% for dt in doc_types %}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link {% if loop.first %}active{% endif %}" data-bs-toggle="tab"
+                data-bs-target="#tab-{{ dt }}" type="button" role="tab">
+          {{ type_labels[dt] }}
+          <span class="badge bg-secondary" data-count="{{ dt }}">{{ counts[dt] }}</span>
+        </button>
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="tab-content pt-3">
+      {% for dt in doc_types %}
+      <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="tab-{{ dt }}" role="tabpanel">
+        {% set docs = documents[dt] %}
+        {% if docs %}
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead>
+            <tr><th>发布时间</th><th>标题</th><th>来源</th><th class="text-end">操作</th></tr>
+          </thead>
+          <tbody>
+            {% for d in docs %}
+            <tr>
+              <td class="text-nowrap">{{ d.published_at or "-" }}</td>
+              <td><a href="/documents/{{ d.id }}/view">{{ d.title }}</a></td>
+              <td class="text-nowrap">{{ d.source or "-" }}</td>
+              <td class="text-end text-nowrap">
+                {% if d.file_exists %}
+                <a class="btn btn-sm btn-outline-secondary" href="/documents/{{ d.id }}/open" target="_blank">打开</a>
+                {% else %}
+                <span class="badge bg-warning text-dark">文件缺失</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="text-muted text-center py-3">暂无{{ type_labels[dt] }}，点击右上角「重新拉取」获取</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="form-text mt-2">数据来源：东方财富</div>
+  </div>
+</div>
+
+<script>
+  function showNotice(html, kind) {
+    var box = document.getElementById('pullNotice');
+    box.innerHTML = '<div class="alert alert-' + kind + ' alert-dismissible fade show">' +
+      html + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+  }
+
+  document.querySelectorAll('.btn-pull').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.dataset.id;
+      var label = btn.dataset.label;
+      var spinner = btn.querySelector('.spinner-border');
+      var text = btn.querySelector('.btn-pull-text');
+      btn.disabled = true;
+      spinner.classList.remove('d-none');
+      text.textContent = '拉取中…';
+
+      fetch('/api/stocks/' + id + '/pull', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) {
+            showNotice('拉取失败：' + (data.error || '未知错误'), 'danger');
+            return;
+          }
+          var parts = data.types.map(function (t) {
+            return t.error
+              ? t.label + '失败(' + t.error + ')'
+              : t.label + '新增' + t.added + '/跳过' + t.skipped;
+          });
+          var hasNew = data.types.some(function (t) { return t.added > 0; });
+          var idx = data.index || {};
+          var idxMsg = '';
+          if (idx.error) {
+            idxMsg = '，索引：' + idx.error;
+          } else if (idx.indexed > 0) {
+            idxMsg = '，已索引' + idx.indexed + '篇';
+          }
+          showNotice('拉取完成：' + label + '；' + parts.join('；') + idxMsg +
+            (hasNew ? '，正在刷新列表…' : ''), 'success');
+          if (hasNew) {
+            setTimeout(function () { location.reload(); }, 800);
+          } else {
+            data.types.forEach(function (t) {
+              var b = document.querySelector('[data-count="' + t.type + '"]');
+              if (b) b.textContent = data.counts[t.type];
+            });
+          }
+        })
+        .catch(function () {
+          showNotice('拉取请求异常，请重试', 'danger');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          spinner.classList.add('d-none');
+          text.textContent = '重新拉取';
+        });
+    });
+  });
+</script>
+{% endblock %}

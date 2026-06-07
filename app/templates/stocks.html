@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">股票列表</h3>
+  <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addStockModal">新增股票</button>
+</div>
+
+{% if error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+<div id="pullNotice"></div>
+
+<table class="table table-hover align-middle">
+  <thead>
+    <tr><th>代码</th><th>名称</th><th>市场</th><th>资料</th><th>备注</th><th class="text-end">操作</th></tr>
+  </thead>
+  <tbody>
+    {% for s in stocks %}
+    <tr id="stock-row-{{ s.id }}">
+      <td>{{ s.code }}</td>
+      <td><a href="/stocks/{{ s.id }}">{{ s.name }}</a></td>
+      <td>{{ s.market }}</td>
+      <td class="doc-counts">
+        {% set c = doc_counts[s.id] %}
+        {% for dt in doc_types %}
+        <span class="badge bg-light text-dark border" data-count="{{ dt }}">{{ type_labels[dt] }} {{ c[dt] }}</span>
+        {% endfor %}
+        <span class="badge bg-secondary" data-count="total">共 {{ c.total }}</span>
+      </td>
+      <td>{{ s.note }}</td>
+      <td class="text-end text-nowrap">
+        <button type="button" class="btn btn-sm btn-primary btn-pull"
+                data-id="{{ s.id }}" data-label="{{ s.code }} {{ s.name }}">
+          <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+          <span class="btn-pull-text">一键拉取</span>
+        </button>
+        <a class="btn btn-sm btn-outline-secondary" href="/stocks/{{ s.id }}">详情</a>
+        <form class="d-inline" method="post" action="/stocks/{{ s.id }}/delete"
+              onsubmit="return confirm('确认删除股票 {{ s.code }} {{ s.name }}？');">
+          <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" class="text-center text-muted">暂无数据，点击右上角「新增股票」</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="modal fade" id="addStockModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/stocks">
+        <div class="modal-header">
+          <h5 class="modal-title">新增股票</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">股票代码（6 位）</label>
+            <input type="text" name="code" class="form-control" pattern="\d{6}"
+                   maxlength="6" placeholder="如 600519" required>
+            <div class="form-text">名称将在保存时按代码自动校验并填充。</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">市场</label>
+            <select name="market" class="form-select" required>
+              {% for m in markets %}<option value="{{ m }}">{{ m }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">备注（可选）</label>
+            <input type="text" name="note" class="form-control">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showNotice(html, kind) {
+    var box = document.getElementById('pullNotice');
+    box.innerHTML = '<div class="alert alert-' + kind + ' alert-dismissible fade show">' +
+      html + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>';
+  }
+
+  document.querySelectorAll('.btn-pull').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var id = btn.dataset.id;
+      var label = btn.dataset.label;
+      var spinner = btn.querySelector('.spinner-border');
+      var text = btn.querySelector('.btn-pull-text');
+      btn.disabled = true;
+      spinner.classList.remove('d-none');
+      text.textContent = '拉取中…';
+
+      fetch('/api/stocks/' + id + '/pull', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (!data.ok) {
+            showNotice(label + ' 拉取失败：' + (data.error || '未知错误'), 'danger');
+            return;
+          }
+          var row = document.getElementById('stock-row-' + id);
+          var cell = row.querySelector('.doc-counts');
+          data.types.forEach(function (t) {
+            var badge = cell.querySelector('[data-count="' + t.type + '"]');
+            if (badge) badge.textContent = t.label + ' ' + data.counts[t.type];
+          });
+          var totalBadge = cell.querySelector('[data-count="total"]');
+          if (totalBadge) totalBadge.textContent = '共 ' + data.counts.total;
+
+          var parts = data.types.map(function (t) {
+            return t.error
+              ? t.label + '失败(' + t.error + ')'
+              : t.label + '新增' + t.added + '/跳过' + t.skipped;
+          });
+          var idx = data.index || {};
+          var idxMsg = '';
+          if (idx.error) {
+            idxMsg = '，索引：' + idx.error;
+          } else if (idx.indexed > 0) {
+            idxMsg = '，已索引' + idx.indexed + '篇';
+          }
+          showNotice('拉取完成：' + label + '；' + parts.join('；') + idxMsg, 'success');
+        })
+        .catch(function () {
+          showNotice(label + ' 拉取请求异常，请重试', 'danger');
+        })
+        .finally(function () {
+          btn.disabled = false;
+          spinner.classList.add('d-none');
+          text.textContent = '一键拉取';
+        });
+    });
+  });
+</script>
+{% endblock %}

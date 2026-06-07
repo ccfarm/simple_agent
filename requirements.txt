@@ -1,0 +1,15 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+jinja2==3.1.4
+python-multipart==0.0.9
+itsdangerous==2.2.0
+requests==2.32.5
+PyMuPDF==1.26.5
+pymupdf4llm==0.0.27
+beautifulsoup4==4.14.3
+llama-index-core==0.14.16
+llama-index-embeddings-huggingface==0.6.1
+llama-index-llms-openai-like==0.6.0
+sentence-transformers==2.7.0
+torch
+numpy<2

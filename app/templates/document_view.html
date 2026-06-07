@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/stocks">股票列表</a></li>
+    {% if stock %}
+    <li class="breadcrumb-item"><a href="/stocks/{{ stock.id }}">{{ stock.code }} {{ stock.name }}</a></li>
+    {% endif %}
+    <li class="breadcrumb-item active">资料详情</li>
+  </ol>
+</nav>
+
+<div class="card">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span>{{ type_labels[doc.doc_type] }}</span>
+    {% if not missing %}
+    <a class="btn btn-sm btn-outline-secondary" href="/documents/{{ doc.id }}/open" target="_blank">打开本地文件</a>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <h4>{{ doc.title }}</h4>
+    <p class="text-muted mb-3">
+      来源：{{ doc.source or "-" }}　发布时间：{{ doc.published_at or "-" }}
+      {% if doc.url %}　<a href="{{ doc.url }}" target="_blank">原文链接</a>{% endif %}
+    </p>
+    {% if missing %}
+    <div class="alert alert-warning">本地文件缺失或不可读，无法展示正文。可尝试在股票详情页「重新拉取」。</div>
+    {% else %}
+    <pre class="bg-light p-3 rounded" style="white-space: pre-wrap; word-break: break-word;">{{ content }}</pre>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>AI 问答</h3>
+
+{% if not llm_configured %}
+<div class="alert alert-warning">
+  尚未配置 DeepSeek API Key，问答不可用。请前往<a href="/settings">设置页</a>填写后再试。
+</div>
+{% endif %}
+
+<div class="row g-2 align-items-end mb-3">
+  <div class="col-md-6">
+    <label class="form-label">选择股票</label>
+    <select id="stockSelect" class="form-select">
+      <option value="">请选择股票…</option>
+      {% for s in stocks %}
+      <option value="{{ s.id }}" {% if selected_id == s.id %}selected{% endif %}>{{ s.code }} {{ s.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-6">
+    <button id="btnClear" type="button" class="btn btn-outline-secondary">清空对话</button>
+  </div>
+</div>
+
+{% if not stocks %}
+<div class="alert alert-secondary">还没有股票，请先到<a href="/stocks">股票列表</a>添加并拉取资料。</div>
+{% endif %}
+
+<div class="card">
+  <div id="chatBox" class="card-body" style="min-height: 320px; max-height: 60vh; overflow-y: auto;">
+    <p class="text-muted" id="emptyHint">选择股票后开始提问，例如「请总结这家公司最近的主要利好和风险」。</p>
+  </div>
+  <div class="card-footer">
+    <div class="input-group">
+      <input id="questionInput" type="text" class="form-control" placeholder="输入问题…">
+      <button id="btnSend" class="btn btn-primary">
+        <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+        <span class="btn-send-text">发送</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+  var chatHistory = [];
+  var conversations = {};
+  var chatBox = document.getElementById('chatBox');
+  var stockSelect = document.getElementById('stockSelect');
+  var questionInput = document.getElementById('questionInput');
+  var btnSend = document.getElementById('btnSend');
+  var emptyHint = document.getElementById('emptyHint');
+  var currentStockId = stockSelect.value || '';
+
+  function escapeHtml(s) {
+    var div = document.createElement('div');
+    div.textContent = s == null ? '' : s;
+    return div.innerHTML;
+  }
+
+  function appendBubble(role, text) {
+    if (emptyHint) { emptyHint.remove(); emptyHint = null; }
+    var align = role === 'user' ? 'text-end' : 'text-start';
+    var bg = role === 'user' ? 'bg-primary text-white' : 'bg-light';
+    var wrap = document.createElement('div');
+    wrap.className = 'mb-2 ' + align;
+    wrap.innerHTML = '<span class="d-inline-block p-2 rounded ' + bg +
+      '" style="max-width: 85%; white-space: pre-wrap; text-align: left;">' + escapeHtml(text) + '</span>';
+    chatBox.appendChild(wrap);
+    chatBox.scrollTop = chatBox.scrollHeight;
+    return wrap;
+  }
+
+  function appendSources(sources) {
+    if (!sources || !sources.length) return;
+    var box = document.createElement('div');
+    box.className = 'mb-3 text-start';
+    var items = sources.map(function (s) {
+      var label = (s.doc_type ? '[' + escapeHtml(s.doc_type) + '] ' : '') + escapeHtml(s.title || '未命名');
+      var links = '';
+      if (s.doc_id) {
+        links += ' <a href="/documents/' + s.doc_id + '/view" target="_blank">查看</a>';
+        links += ' · <a href="/documents/' + s.doc_id + '/open" target="_blank">打开</a>';
+      }
+      if (s.url) { links += ' · <a href="' + escapeHtml(s.url) + '" target="_blank">原文</a>'; }
+      return '<li>' + label + links + '</li>';
+    }).join('');
+    box.innerHTML = '<div class="small text-muted">引用资料：</div><ul class="small mb-0">' + items + '</ul>';
+    chatBox.appendChild(box);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function appendNotice(text, kind) {
+    if (emptyHint) { emptyHint.remove(); emptyHint = null; }
+    var div = document.createElement('div');
+    div.className = 'alert alert-' + kind + ' py-2';
+    div.textContent = text;
+    chatBox.appendChild(div);
+    chatBox.scrollTop = chatBox.scrollHeight;
+  }
+
+  function setLoading(loading) {
+    var spinner = btnSend.querySelector('.spinner-border');
+    var text = btnSend.querySelector('.btn-send-text');
+    btnSend.disabled = loading;
+    questionInput.disabled = loading;
+    if (loading) { spinner.classList.remove('d-none'); text.textContent = '思考中…'; }
+    else { spinner.classList.add('d-none'); text.textContent = '发送'; }
+  }
+
+  function emptyHtml() {
+    return '<p class="text-muted" id="emptyHint">选择股票后开始提问，例如「请总结这家公司最近的主要利好和风险」。</p>';
+  }
+
+  function saveConversation(id) {
+    if (!id) return;
+    conversations[id] = { history: chatHistory.slice(), html: chatBox.innerHTML };
+  }
+
+  function loadConversation(id) {
+    var conv = id ? conversations[id] : null;
+    if (conv) {
+      chatHistory = conv.history.slice();
+      chatBox.innerHTML = conv.html;
+    } else {
+      chatHistory = [];
+      chatBox.innerHTML = emptyHtml();
+    }
+    emptyHint = document.getElementById('emptyHint');
+  }
+
+  function clearChat() {
+    chatHistory = [];
+    chatBox.innerHTML = emptyHtml();
+    emptyHint = document.getElementById('emptyHint');
+    if (currentStockId) { delete conversations[currentStockId]; }
+  }
+
+  function onStockChange() {
+    saveConversation(currentStockId);
+    currentStockId = stockSelect.value;
+    loadConversation(currentStockId);
+  }
+
+  document.getElementById('btnClear').addEventListener('click', clearChat);
+  stockSelect.addEventListener('change', onStockChange);
+
+  function send() {
+    var stockId = stockSelect.value;
+    var question = questionInput.value.trim();
+    if (!stockId) { appendNotice('请先选择股票', 'warning'); return; }
+    if (!question) { return; }
+
+    appendBubble('user', question);
+    questionInput.value = '';
+    setLoading(true);
+
+    fetch('/api/stocks/' + stockId + '/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question, history: chatHistory })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.ok) {
+          appendNotice(data.error || '问答失败', 'danger');
+          return;
+        }
+        if (data.from_docs === false) {
+          appendNotice('⚠️ 本回答由大模型基于通用知识生成，未引用本地资料，可能与最新情况不符，仅供参考。', 'warning');
+        }
+        appendBubble('assistant', data.answer);
+        appendSources(data.sources);
+        chatHistory.push({ role: 'user', content: question });
+        chatHistory.push({ role: 'assistant', content: data.answer });
+        saveConversation(stockId);
+      })
+      .catch(function (err) { console.error('ask 请求异常:', err); appendNotice('请求失败，请稍后重试', 'danger'); })
+      .finally(function () { setLoading(false); questionInput.focus(); });
+  }
+
+  btnSend.addEventListener('click', send);
+  questionInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  });
+</script>
+{% endblock %}

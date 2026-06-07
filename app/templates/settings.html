@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h3>设置</h3>
+{% if saved %}
+<div class="alert alert-success">配置已保存。</div>
+{% endif %}
+<form class="col-md-6" method="post" action="/settings">
+  <div class="mb-3">
+    <label class="form-label">DeepSeek API Key</label>
+    <input type="password" name="api_key" class="form-control" placeholder="sk-…" value="{{ api_key }}">
+    <div class="form-text">每个账号独立配置，仅用于本账号的 AI 问答。</div>
+  </div>
+  <button type="submit" class="btn btn-primary">保存</button>
+</form>
+{% endblock %}
